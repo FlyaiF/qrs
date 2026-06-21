@@ -124,6 +124,73 @@ with HTTPServer((ADDR, PORT), CustomHandler) as httpd:
     httpd.serve_forever()
 ```
 
+## Desktop build (Tauri)
+
+This repository now supports desktop packaging with [Tauri](https://tauri.app/) and keeps the existing web workflow unchanged.
+
+### Deliverables
+
+- Release assets: Tauri installers/bundles for macOS, Linux, and Windows
+- Workflow artifacts: raw platform binaries (`qrs` / `qrs.exe`)
+
+### Prerequisites
+
+- Node.js + pnpm
+- Rust toolchain (`rustup`, stable)
+- Tauri system dependencies for your platform (Linux requires WebKitGTK/GTK development packages)
+
+### Local desktop commands
+
+```bash
+pnpm run desktop:dev
+pnpm run desktop:build
+pnpm run desktop:build:macos
+pnpm run desktop:build:linux
+pnpm run desktop:build:windows
+```
+
+Desktop bundles are generated under `src-tauri/target/release/bundle`.
+
+### Release workflow
+
+Cross-platform desktop releases are built by:
+
+- `.github/workflows/tauri-release.yml`
+
+Trigger options:
+
+- Push a version tag such as `v0.2.0`
+- Run `workflow_dispatch` manually and provide a `release_tag` such as `v0.2.0`
+
+### Notes
+
+- Desktop packaging uses `pnpm run generate` (static output) instead of Nuxt server mode.
+- `server/api/pageview.ts` has been removed because static desktop packaging does not run Nuxt server API routes.
+
+## Screen Window Scan
+
+The scan page supports two input sources switchable via the **Source** selector:
+
+| Mode              | How it works                                                                                |
+| ----------------- | ------------------------------------------------------------------------------------------- |
+| **Camera**        | Uses the device camera via `getUserMedia` (default behaviour)                               |
+| **Screen Window** | Captures a window or screen via `getDisplayMedia`, then scans QR codes from the live stream |
+
+### Using Screen Window mode
+
+1. Open the **Scan** page and click **Screen Window** in the Source selector.
+2. Click **Select Window** — your OS will show a picker to choose a window, application, or entire screen.
+3. Once sharing starts, QR codes visible in that window are scanned automatically.
+4. Click **Re-select Window** to pick a different source.
+5. Switching back to **Camera** stops the screen share immediately.
+
+### Platform notes
+
+- `getDisplayMedia` is supported in modern browsers (Chrome 72+, Firefox 66+, Safari 13+) and in Tauri's WebView on all platforms.
+- The OS may require explicit screen-recording permission (e.g. macOS System Preferences → Privacy → Screen Recording).
+- The browser/OS picker is shown every time you click **Select Window**; there is no way to pre-grant a specific window silently.
+- If the shared window is closed by the user, scanning stops and the status returns to "No Signal" automatically.
+
 ## Reference
 
 ### Fountain Codes

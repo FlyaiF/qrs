@@ -6,7 +6,7 @@ import QrScanner from 'qr-scanner'
 import { useKiloBytesNumberFormat } from '~/composables/intlNumberFormat'
 import { createLTDecodeWorker } from '~/composables/lt-decode'
 import { useBytesRate } from '~/composables/timeseries'
-import { CameraSignalStatus } from '~/types'
+import { CameraSignalStatus, ScanSourceMode } from '~/types'
 
 const props = withDefaults(defineProps<{
   maxScansPerSecond?: number
@@ -53,6 +53,7 @@ const { devices } = useDevicesList({
 const cameraSignalStatus = ref(CameraSignalStatus.Waiting)
 const cameras = computed(() => devices.value.filter(i => i.kind === 'videoinput'))
 const selectedCamera = useLocalStorage('qrs-selected-camera', cameras.value[0]?.deviceId)
+const scanSourceMode = useLocalStorage<ScanSourceMode>('qrs-scan-source-mode', ScanSourceMode.Camera)
 
 watchEffect(() => {
   if (!selectedCamera.value)
@@ -64,6 +65,8 @@ watchEffect(() => {
 let qrScanner: QrScanner | undefined
 
 watch(cameras, () => {
+  if (scanSourceMode.value !== ScanSourceMode.Camera)
+    return
   if (selectedCamera.value && cameras.value.find(i => i.deviceId === selectedCamera.value)) {
     setTimeout(() => {
       qrScanner?.setCamera(selectedCamera.value!)
@@ -77,11 +80,95 @@ const video = shallowRef<HTMLVideoElement>()
 const videoWidth = ref(0)
 const videoHeight = ref(0)
 
+// Screen capture state
+const screenStream = shallowRef<MediaStream | null>(null)
+let screenScanIntervalId: ReturnType<typeof setInterval> | null = null
+let screenScanInFlight = false
+
+async function selectScreenSource() {
+  if (!(navigator && 'mediaDevices' in navigator && 'getDisplayMedia' in navigator.mediaDevices)) {
+    cameraSignalStatus.value = CameraSignalStatus.NotSupported
+    return
+  }
+  stopScreenCapture()
+  cameraSignalStatus.value = CameraSignalStatus.Waiting
+  try {
+    const stream = await navigator.mediaDevices.getDisplayMedia({
+      video: true,
+      audio: false,
+    })
+    screenStream.value = stream
+    video.value!.srcObject = stream
+    await video.value!.play()
+    stream.getVideoTracks()[0]?.addEventListener('ended', () => {
+      stopScreenCapture()
+      cameraSignalStatus.value = CameraSignalStatus.Waiting
+    })
+    cameraSignalStatus.value = CameraSignalStatus.Ready
+    startScreenScanLoop()
+  }
+  catch (e) {
+    if ((e as Error).name === 'NotAllowedError' || (e as Error).name === 'AbortError') {
+      cameraSignalStatus.value = CameraSignalStatus.NotGranted
+    }
+    else {
+      error.value = e
+    }
+  }
+}
+
+function stopScreenCapture() {
+  if (screenScanIntervalId !== null) {
+    clearInterval(screenScanIntervalId)
+    screenScanIntervalId = null
+  }
+  if (screenStream.value) {
+    screenStream.value.getTracks().forEach(t => t.stop())
+    screenStream.value = null
+  }
+  if (video.value) {
+    video.value.srcObject = null
+  }
+}
+
+function startScreenScanLoop() {
+  if (screenScanIntervalId !== null) {
+    clearInterval(screenScanIntervalId)
+  }
+  const interval = Math.round(1000 / Math.max(1, props.maxScansPerSecond))
+  screenScanIntervalId = setInterval(async () => {
+    if (screenScanInFlight)
+      return
+    if (!video.value || !screenStream.value)
+      return
+    if (video.value.readyState < 2)
+      return
+    try {
+      screenScanInFlight = true
+      const result = await QrScanner.scanImage(video.value!, { returnDetailedScanResult: true })
+      await scanFrame(result)
+    }
+    catch {
+      // No QR code found — expected when no QR is visible
+    }
+    finally {
+      screenScanInFlight = false
+    }
+  }, interval)
+}
+
 onMounted(async () => {
   watch([
     () => props.maxScansPerSecond,
     selectedCamera,
-  ], async ([maxScansPerSecond]) => {
+    scanSourceMode,
+  ], async ([maxScansPerSecond, , mode]) => {
+    if (mode !== ScanSourceMode.Camera) {
+      qrScanner?.stop()
+      cameraSignalStatus.value = CameraSignalStatus.Waiting
+      return
+    }
+    stopScreenCapture()
     if (qrScanner) {
       qrScanner.destroy()
       await new Promise(resolve => setTimeout(resolve, 1000))
@@ -123,16 +210,26 @@ onMounted(async () => {
     updateCameraStatus()
   }, { immediate: true })
   watch(selectedCamera, () => {
-    if (qrScanner && selectedCamera.value) {
+    if (scanSourceMode.value === ScanSourceMode.Camera && qrScanner && selectedCamera.value) {
       qrScanner.setCamera(selectedCamera.value)
       qrScanner.start()
     }
   })
+  watch(() => props.maxScansPerSecond, () => {
+    if (scanSourceMode.value === ScanSourceMode.ScreenWindow && screenStream.value) {
+      startScreenScanLoop()
+    }
+  })
   useIntervalFn(() => {
-    updateCameraStatus()
+    if (scanSourceMode.value === ScanSourceMode.Camera) {
+      updateCameraStatus()
+    }
   }, 250)
 })
-onUnmounted(() => qrScanner && qrScanner.destroy())
+onUnmounted(() => {
+  qrScanner && qrScanner.destroy()
+  stopScreenCapture()
+})
 
 async function updateCameraStatus() {
   try {
@@ -337,7 +434,42 @@ function now() {
   <div items-left flex flex-col gap-4>
     <pre v-if="error" overflow-x-auto text-red v-text="error" />
 
-    <Collapsable label="Cameras" :default="true">
+    <Collapsable label="Source" :default="true">
+      <div w-full flex flex-wrap gap-2 p2>
+        <button
+          :class="{ 'text-blue bg-blue/20': scanSourceMode === ScanSourceMode.Camera }"
+          px2 py1 text-sm shadow-sm
+          border="~ gray/25 rounded-lg"
+          @click="scanSourceMode = ScanSourceMode.Camera"
+        >
+          <span i-carbon-camera mr-1 inline-block align-text-top />
+          Camera
+        </button>
+        <button
+          :class="{ 'text-blue bg-blue/20': scanSourceMode === ScanSourceMode.ScreenWindow }"
+          px2 py1 text-sm shadow-sm
+          border="~ gray/25 rounded-lg"
+          @click="scanSourceMode = ScanSourceMode.ScreenWindow"
+        >
+          <span i-carbon-screen mr-1 inline-block align-text-top />
+          Screen Window
+        </button>
+      </div>
+      <div v-if="scanSourceMode === ScanSourceMode.ScreenWindow" flex="~ wrap items-center gap-2" p2>
+        <button
+          px2 py1 text-sm shadow-sm
+          border="~ gray/25 rounded-lg"
+          @click="selectScreenSource()"
+        >
+          {{ screenStream ? 'Re-select Window' : 'Select Window' }}
+        </button>
+        <span v-if="screenStream" text-sm text-green-500>
+          Screen sharing active
+        </span>
+      </div>
+    </Collapsable>
+
+    <Collapsable v-if="scanSourceMode === ScanSourceMode.Camera" label="Cameras" :default="true">
       <div w-full flex flex-wrap gap-2 p2>
         <button
           v-for="(item, index) of cameras" :key="item.deviceId" :class="{
