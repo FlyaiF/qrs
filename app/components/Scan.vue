@@ -83,6 +83,7 @@ const videoHeight = ref(0)
 // Screen capture state
 const screenStream = shallowRef<MediaStream | null>(null)
 let screenScanIntervalId: ReturnType<typeof setInterval> | null = null
+let screenScanInFlight = false
 
 async function selectScreenSource() {
   if (!(navigator && 'mediaDevices' in navigator && 'getDisplayMedia' in navigator.mediaDevices)) {
@@ -136,17 +137,22 @@ function startScreenScanLoop() {
   }
   const interval = Math.round(1000 / Math.max(1, props.maxScansPerSecond))
   screenScanIntervalId = setInterval(async () => {
+    if (screenScanInFlight)
+      return
     if (!video.value || !screenStream.value)
       return
     if (video.value.readyState < 2)
       return
     try {
+      screenScanInFlight = true
       const result = await QrScanner.scanImage(video.value!, { returnDetailedScanResult: true })
-      shutterCount.value += 1
       await scanFrame(result)
     }
     catch {
       // No QR code found — expected when no QR is visible
+    }
+    finally {
+      screenScanInFlight = false
     }
   }, interval)
 }
@@ -162,6 +168,7 @@ onMounted(async () => {
       cameraSignalStatus.value = CameraSignalStatus.Waiting
       return
     }
+    stopScreenCapture()
     if (qrScanner) {
       qrScanner.destroy()
       await new Promise(resolve => setTimeout(resolve, 1000))
