@@ -7,5 +7,5 @@ export enum CameraSignalStatus {
 
 export enum ScanSourceMode {
   Camera = 'camera',
-  Screen = 'screen',
+  ScreenWindow = 'screen',
 }

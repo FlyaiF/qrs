@@ -209,7 +209,7 @@ onMounted(async () => {
     }
   })
   watch(() => props.maxScansPerSecond, () => {
-    if (scanSourceMode.value === ScanSourceMode.Screen && screenStream.value) {
+    if (scanSourceMode.value === ScanSourceMode.ScreenWindow && screenStream.value) {
       startScreenScanLoop()
     }
   })
@@ -439,16 +439,16 @@ function now() {
           Camera
         </button>
         <button
-          :class="{ 'text-blue bg-blue/20': scanSourceMode === ScanSourceMode.Screen }"
+          :class="{ 'text-blue bg-blue/20': scanSourceMode === ScanSourceMode.ScreenWindow }"
           px2 py1 text-sm shadow-sm
           border="~ gray/25 rounded-lg"
-          @click="scanSourceMode = ScanSourceMode.Screen"
+          @click="scanSourceMode = ScanSourceMode.ScreenWindow"
         >
           <span i-carbon-screen mr-1 inline-block align-text-top />
           Screen Window
         </button>
       </div>
-      <div v-if="scanSourceMode === ScanSourceMode.Screen" flex="~ wrap items-center gap-2" p2>
+      <div v-if="scanSourceMode === ScanSourceMode.ScreenWindow" flex="~ wrap items-center gap-2" p2>
         <button
           px2 py1 text-sm shadow-sm
           border="~ gray/25 rounded-lg"
