@@ -124,6 +124,49 @@ with HTTPServer((ADDR, PORT), CustomHandler) as httpd:
     httpd.serve_forever()
 ```
 
+## Desktop build (Tauri)
+
+This repository now supports desktop packaging with [Tauri](https://tauri.app/) and keeps the existing web workflow unchanged.
+
+### Deliverables
+
+- Release assets: Tauri installers/bundles for macOS, Linux, and Windows
+- Workflow artifacts: raw platform binaries (`qrs` / `qrs.exe`)
+
+### Prerequisites
+
+- Node.js + pnpm
+- Rust toolchain (`rustup`, stable)
+- Tauri system dependencies for your platform (Linux requires WebKitGTK/GTK development packages)
+
+### Local desktop commands
+
+```bash
+pnpm run desktop:dev
+pnpm run desktop:build
+pnpm run desktop:build:macos
+pnpm run desktop:build:linux
+pnpm run desktop:build:windows
+```
+
+Desktop bundles are generated under `src-tauri/target/release/bundle`.
+
+### Release workflow
+
+Cross-platform desktop releases are built by:
+
+- `.github/workflows/tauri-release.yml`
+
+Trigger options:
+
+- Push a version tag such as `v0.2.0`
+- Run `workflow_dispatch` manually and provide a `release_tag` such as `v0.2.0`
+
+### Notes
+
+- Desktop packaging uses `pnpm run generate` (static output) instead of Nuxt server mode.
+- `server/api/pageview.ts` has been removed because static desktop packaging does not run Nuxt server API routes.
+
 ## Reference
 
 ### Fountain Codes
