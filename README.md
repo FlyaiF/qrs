@@ -167,6 +167,30 @@ Trigger options:
 - Desktop packaging uses `pnpm run generate` (static output) instead of Nuxt server mode.
 - `server/api/pageview.ts` has been removed because static desktop packaging does not run Nuxt server API routes.
 
+## Screen Window Scan
+
+The scan page supports two input sources switchable via the **Source** selector:
+
+| Mode              | How it works                                                                                |
+| ----------------- | ------------------------------------------------------------------------------------------- |
+| **Camera**        | Uses the device camera via `getUserMedia` (default behaviour)                               |
+| **Screen Window** | Captures a window or screen via `getDisplayMedia`, then scans QR codes from the live stream |
+
+### Using Screen Window mode
+
+1. Open the **Scan** page and click **Screen Window** in the Source selector.
+2. Click **Select Window** — your OS will show a picker to choose a window, application, or entire screen.
+3. Once sharing starts, QR codes visible in that window are scanned automatically.
+4. Click **Re-select Window** to pick a different source.
+5. Switching back to **Camera** stops the screen share immediately.
+
+### Platform notes
+
+- `getDisplayMedia` is supported in modern browsers (Chrome 72+, Firefox 66+, Safari 13+) and in Tauri's WebView on all platforms.
+- The OS may require explicit screen-recording permission (e.g. macOS System Preferences → Privacy → Screen Recording).
+- The browser/OS picker is shown every time you click **Select Window**; there is no way to pre-grant a specific window silently.
+- If the shared window is closed by the user, scanning stops and the status returns to "No Signal" automatically.
+
 ## Reference
 
 ### Fountain Codes

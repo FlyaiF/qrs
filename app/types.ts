@@ -4,3 +4,8 @@ export enum CameraSignalStatus {
   Waiting,
   Ready,
 }
+
+export enum ScanSourceMode {
+  Camera = 'camera',
+  Screen = 'screen',
+}
